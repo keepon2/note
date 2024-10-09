@@ -1,0 +1,80 @@
+嵌入式设备启动流程：
+1.IROM 代码（bootrom）
+{
+	固化在SOC芯片里面的一段代码（bootrom）
+	1.基本的硬件初始化，判断启动方式（SD/USB/EMMC）
+	2.读取储存一部分代码到 IRAM 被称之为 SPL （secondary program loader)
+}
+2.IRAM (SPL) 代码运行
+{
+	bootloader 的第一阶段
+	1.初始化系统时钟
+	2.初始化外部内存
+	3.搬移 bootloader 第二阶段代码到 DDR 中 u-boot.bin
+}
+3.内存中运行 bootloader 第二阶段代码
+{
+	bootloader第二阶段
+	1.初始化基本的硬件设备 （串口，EMMC，SD）
+	2.加载 OS 到内存
+}
+4.运行 OS
+5.挂载文件系统
+6.运行应用程序
+
+bootloader = BIOS + 引导程序 + 搬移 OS 到指定位置
+
+
+具体流程：
+1.SOC内部irom代码 
+      [1]确定启动的设备
+      [2]初始化启动的设备
+      [3]将启动设备开始一部分代码(spl)搬移到iRam下运行
+2.SOC内部iRAM代码 (bootloader第一段代码) 
+      [1]系统时钟初始化 
+      [2]内存初始化
+      [3]将存储介质中的bootloader (u-boot-2013.01) 搬移到DDR内存中
+
+3.内存中bootloader(u-boot-2013.01)运行
+
+      (1)设置异常向量表 
+         [1]每个异常的处理过程
+         [2]告诉ARM核异常向量表的基地址
+
+      (2)设置ARM核为SVC模式
+
+      (3)初始化cp15的协处理
+         [1]让cache无效
+         [2]关闭cache和mmu
+
+      (4)_main  (arch/arm/lib/crt0.S)
+          [1]设置sp 
+          [2]板子的第一阶段初始化(board_init_f : arch/arm/lib/board.c)
+             (1)获取cpu id 
+             (2)定时器初始化
+             (3)波特率
+             (4)串口初始化
+             (5)打印u_boot版本信息
+             (6)打印cpu信息
+             (7)记录内存大小
+             (8)预留一部分内存空间，为u_boot重定向做准备
+
+
+      (5)u_boot重定向 (将u_boot搬移内存的最顶端)
+
+      (6)设置c语言的运行环境
+         清bss段 
+
+      (7)板子的第二阶段初始化(board_init_r : arch/arm/lib/board.c)
+         [1]初始化硬件设备
+            <1>初始化EMMC存储器
+            <2>初始化DM9000网卡设备
+         [2]从存储介质中读取u_boot需要的环境变量
+            (注意:由于之前没有保存过,第一次读取会失败,此时使用u_boot自带的默认环境变量)
+         [3]main_loop
+            (1)判断是否设置bootcmd和bootdelay
+               [1]如果已经设置,会在到计时的时间中判断用户是否有输入，
+                  如果没有输入则执行bootcmd中指定的命令
+                  如果用户有输入，则进入u_boot交互界面(监视用户是否输入了uboot命令，如果输入则执行命令)
+               
+               [2]如果没有设置，则进入u_boot交互界面 
