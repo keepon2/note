@@ -92,8 +92,8 @@ struct in_addr结构体指针，用于保存转换后的IPv4地址
 ```sh
 int inet_pton(int af, const char 'src, void "dst);
 ```
-af —— 地址族，用于指定IPv4或IPv6
-src —— 点分十进制形式的IPv4或IPv6地址的C字符串
+af —— 地址族，用于指定IPv4或IPv6  
+src —— 点分十进制形式的IPv4或IPv6地址的C字符串  
 dst —— 指向存储转换后地址的内存空间
 
 **网络字节序转换成IP字符串**  
@@ -124,13 +124,120 @@ uint16_t ntohs(uint16_t netshort);
 ```
 
 ### 通用套接字地址结构
-struct sockaddr
+**struct sockaddr**
+```sh
+struct  sockaddr{
 
-struct sockaddr_in
+　　sa_family_t  sa_family;　  //地址族，最常用的是"AF_INET"(IPV4)和"AF_INET6"(IPV6);　
+　　char  sa_data[14]；　　    //包含套接字中的目标地址和端口信息;
+}；
+```
+sockaddr的缺陷：sa_data把目标地址和端口信息混在一起了  
 
-struct sockaddr_storage
+**struct sockaddr_in**  
+sockaddr_in结构体解决了sockaddr的缺陷，把port和addr 分开储存在两个变量中  
+struct  sockaddr_in/  struct  sockaddr_in6结构体
+```sh
+struct  sockaddr_in{
+    sa_family_t         sin_family;     //地址族
+    uint16_t            sin_port;       //16位TCP/UDP端口号
+    struct  in_addr     sin_addr;       //32位IP地址
+    char                sin_zero[8];    //不使用
+}；
 
-## TCP
+struct  in_addr{
+　　in_addr_t　　　　s_addr;　　         //32位IPV4地址
+}
+```
 
+```sh
+struct sockaddr_in6 {
+     sa_family_t        sin6_family;    //地址族
+     in_port_t          sin6_port;      //端口号
+     uint32_t           sin6_flowinfo;  //IPV6 流量信息
+     struct in6_addr    sin6_addr;      //IP地址
+     uint32_t           sin6_scope_id;  //作用域ID
+};
+
+struct in6_addr {- [目录](#目录)
+  - [socket编程](#socket编程)
+    - [socket是什么](#socket是什么)
+    - [IP和端口](#ip和端口)
+    - [字节序](#字节序)
+    - [通用套接字地址结构](#通用套接字地址结构)
+  - [TCP](#tcp)
+  - [UDP](#udp)
+
+　　unsigned　　char s6_addr[16];       //IPv6 地址 */
+};
+```
+
+**struct sockaddr_storage**  
+
+    相对于sockaddr来说，它结构体的内存空间扩充到了128字节，足以存储IPV6地址
+
+
+## TCP  
+tcp服务器代码：
+tcp客户端代码：
+多进程服务器：
+多线程服务器：
+**通讯特点**        
+
+    面向连接                            ——  三次握手、四次挥手
+    高可靠性                            ——  出错重传机制
+    无丢失、无重复、无出错、按时到达     
+    全双工
+
+|服务器|客户端|含义
+|---|---|---|
+|1.socket|socket|创建套接字|
+|2.bind|bind(可省略)|绑定socket到端口|
+|3.listen||监听socket端口|
+|4.accept|connect|响应socket连接请求(连接远程主机)
+|5.read/write(recv/send)|read/write(recv/send)|发送/接收数据
+|6.close|close|关闭套接字
+
+```sh
+函数原型
+int socket(int domain, int type, int protocol);
+int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
+int listen(int sockfd, int backlog);
+int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
+ssize t recv(int sockfd, void "buf, size_t len, int flags);
+ssize_t send(int sockfd, const void "buf, size_t len, int flags);
+int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
+```
+
+参数列表
+```sh
+domain: 指定套接字的地址族
+        AF_UNIX/AF_LOCAL —— 用于本地通讯
+        AF_INET —— IPv4地址族，用于使用IPv4地址通讯
+        AF_INET6 —— IPv6地址族，用于使用IPv6地址进行通讯
+type: 指定套接字的类型
+        SOCK_STREAM —— 流套接字（TCP通信）
+        SOCK_DGRAM —— 数据报套接字（UDP通信）
+protocol: 指定使用的协议
+        通常使用0表示默认方式
+        IPPROTO_TCP
+        IPPROTO_UDP
+        IPPROTO_SCTP
+        只有当第一个参数为AF_INET或AF_INET6时且使用SCTP协议时才需要配置，其他情况下配0即可
+sockfd: socket函数返回的套接字描述符
+addr: 指定特定协议的地址结构的指针
+addrlen: 该地址结构的长度
+backlog: 最大连接个数（一般小于30）
+buf: 指定缓冲区位置
+len: 指定缓冲区大小
+flags: 通常设置成0
+```
 
 ## UDP
+
+区别：  
+无连接、数据报传输、无粘包现象、有边界保护
+
+
+
+
