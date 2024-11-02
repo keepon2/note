@@ -6,6 +6,7 @@
     - [字节序](#字节序)
     - [通用套接字地址结构](#通用套接字地址结构)
   - [TCP](#tcp)
+    - [数据包结构](#数据包结构)
   - [UDP](#udp)
 
 ## socket编程
@@ -90,7 +91,7 @@ int inet_aton(const char *cp, struct in_addr *inp);
 struct in_addr结构体指针，用于保存转换后的IPv4地址  
 
 ```sh
-int inet_pton(int af, const char 'src, void "dst);
+int inet_pton(int af, const char *src, void *dst);
 ```
 af —— 地址族，用于指定IPv4或IPv6  
 src —— 点分十进制形式的IPv4或IPv6地址的C字符串  
@@ -103,7 +104,7 @@ char *inet_ntoa(struct in_addr in);
 ```
 网络字节序转换成字节序
 ```sh
-const char "inet_ntop(int af, const void *src, char *dst, socklen_t size);
+const char *inet_ntop(int af, const void *src, char *dst, socklen_t size);
 ```
 同上inet_pton
 size —— 缓存区dst大小
@@ -204,8 +205,8 @@ int socket(int domain, int type, int protocol);
 int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
 int listen(int sockfd, int backlog);
 int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
-ssize t recv(int sockfd, void "buf, size_t len, int flags);
-ssize_t send(int sockfd, const void "buf, size_t len, int flags);
+ssize t recv(int sockfd, void *buf, size_t len, int flags);
+ssize_t send(int sockfd, const void *buf, size_t len, int flags);
 int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
 ```
 
@@ -233,11 +234,57 @@ len: 指定缓冲区大小
 flags: 通常设置成0
 ```
 
+### 数据包结构
+![alt text](image-1.png)
+```sh
+端口号: 端口号是unsigned short类型，占2个字节，16位
+序列号(seq): 标识了TCP发送端到TCP接收端的数据流的一个字节，该字节代表着包含该序列号的报文段的数据中的第一个字节, 32位
+确认号(ack): 包含发送确认的一端所期望收到的下一个序号。因此，确认序号应当是上次已成功收到数据字节序号加!(不是单纯的序号加1，还包括数据字节数), 32位
+头部长度: 给出了头部长度，以32位字为单位
+
+协议标志位:
+    CWR -- 拥塞窗口减(发送方降低它的发送速率)
+    ECE -- ECN回显(发送方接收到一个更早的拥塞通告)
+    URG -- 为1表示紧急指针有效
+    ACK -- 为1表示确认序列号有效 -- 可以理解为一个应答数据包
+    PSH -- 为1表示此包为加急包，应尽快将此包交给应用层
+    RST --为l表示需要重新建立连接
+    SYN -- 为1表示同步序号用于发起一个连接 -- 可以理解成为握手请求包
+    FIN -- 为l表示发端完成发送任务 -- 可以理解成挥手请求包,
+
+窗口大小: 用于TCP流量控制
+发送数据的窗口大小，告诉对方在不等待确认的情况下，可以最大发来多大的数据，由于6位最大只能表示65535，如果需要更大的窗口，需要使用选项中的窗口扩大因子选项
+
+
+紧急指针: 只有URG位字段被设置时才有效
+紧急指针指的是本报文段中紧急数据的最后一个字节的序号，表示前面的数据需要加急处理发送
+
+选项: 其他扩展配置，比如扩大窗口大小，时间戳等等
+
+```
+
+
 ## UDP
 
 区别：  
 无连接、数据报传输、无粘包现象、有边界保护
 
+![alt text](images/image-38.png)  
+
+|服务器|客户端|含义
+|---|---|---|
+|1.socket|socket|创建套接字|
+|2.bind||绑定socket到端口|
+|3.sendto()/recvfrom()|sendto()/recvfrom()|数据发送接收|
+|4.close|close|关闭套接字|
 
 
-
+```sh
+函数原型
+ssize_t sendto(int sockfd, const void *buf, size_t len, int flags, const struct sockaddr *dest addr, socklen_t addrlen);
+ssize t recyfromlint sockfd, void *buf, size t len, int flags, struct sockaddr *src addr, socklen_t *addrlen);
+```
+参数列表
+```sh
+flags: 标志参数，为0时表示阻塞方式
+```

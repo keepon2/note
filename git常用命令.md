@@ -1,4 +1,4 @@
-初始化仓库：使用git init命令可以在当前目录下创建一个新的Git仓库。 git init  
+初始化仓库：git init  
 克隆仓库：git clone命令用于从远程仓库克隆项目到本地。 git clone <repository-url>  
 添加文件：git add命令将更改添加到暂存区。 git add <file-name> git add .  
 提交更改：git commit命令将暂存区的更改提交到本地仓库。 git commit -m "commit message"  

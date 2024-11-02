@@ -1,5 +1,5 @@
 # 目录
-
+## C基础
 ### 1.1 static关键字
 
 static关键字可以用于限制变量或函数的作用域，使其在特定范围不可见，同时可以保持静态变量的值不变
@@ -53,23 +53,140 @@ volatile优化，多次读取这个变量的值后，编译器会优化过程：
 
 ### 1.6 多文件编程有什么好处
 
-
 ### 
 
 
-
+## C高级
 ### 2.1 函数指针
 本质上就是一个指针，便于回调其他函数。函数指针类型规范了它回调函数的参数类型和返回值类型，从而避免了回调函数设计的任意性。
+
+
+好处：函数指针类型规范了回调函数的参数类型和返回值类型
+
+根哥：  
+**函数调用的方式：**  
+1.函数名  
+2.函数指针  
+
+**问:为什么通过函数指针调用函数，而不通过函数名调用函数?**  
+使用函数名调用的话，函数被写死了，只能就这一个函数。  
+有些时候无法确定具体要调用的函数，此时我们可以将需要调用的函数名作为参数进行传递，此时用函数指针变量来接收传递的函数名，然后在通过函数指针调用此函数，这样做更灵活  
+
+1.灵活性和动态性  
+能够在函数运行时动态改变函数行为  
+能够存储在数组或容器中，通过索引的方式调用不同的函数   
+
+|区别|函数指针|指针函数|
+|---|---|---|
+|本质|指针|函数|
+|功能|用来指向函数的入口地址，用来调用这个函数|返回值是个指针类型|
+
+**函数指针的定义和函数定义?**  
+int add(int a,int b) => 类型:int (int ,int )  
+去掉所有的变量名、函数名就是函数指针的类型  
+根据类型写函数指针  
+=> int (int ,int) *p  //错误 （没有这种格式）
+=> int *p(int,int)    //错误  (p优先跟括号结合成指针函数了)
+=> int (*p)(int ,int) //正确  
+
+**什么回调函数?**  
+通过函数指针调用的函数，这个过程叫做回调函数  
 |具体实现|方法|
 |---|---|
 |回调函数|需要调用函数但不知道函数名，只能知道函数地址的情况|
 |多态性（虚函数表）|建立函数指针表（函数指针数组）管理多个函数|
 |signal()/pthread_create()|函数指针作为参数传递给其他函数|
 
+```sh
+int pthread_create(pthread_t *thread,
+                   const pthread_attr_t *attr,
+                   void *(*start_routine) (void *),//函数指针变量
+				   void *arg);
+上面时线程的创建函数，他的第三个参数时一个函数指针变量，它指向函数指针的类型是
+void *(void *)
+void *thread_handle(void *arg)
+{
+	......
+	
+}
 
+也可以通过函数名调用
+pthread_create(&tid,NULL,thread_handle,NULL);//创建线程	
+```
+
+**取别名位置规则:别名的位置就是变量的位置**
+```sh
+int a;//定义了一个整形变量a
+typedef int INT;//给int类型取了别名INT
+
+给函数指针区别名
+typedef void (*sighandler_t)(int);//给已有的类型[void (*)(int)]取别名sighandler_t
+变量的位置为sighandler_t，所有别名就是它
+
+sighandler_t signal(int signum, sighandler_t handler);//设置进程对信号的处理方式
+//signum：int类型变量       handler：函数指针类型的变量
+//返回值是一个函数指针
+
+signal函数原型怎么写
+void (*)(int)  signal(int signum,void (*)(int) handler);//错
+void (*)(int)  signal(int signum,void (*handler)(int) );//错
+void (* signal(int signum,void (*handler)(int)))(int)//对
+别名的位置就是变量的位置
+第一步，函数指针变量是signal(int signum, sighandler_t handler);
+void (* signal(int signum, sighandler_t handler))(int)
+第二步，signal里面变量是handler
+void (* signal(int signum, void (*handler)(int)))(int)
+```
+
+```sh
+函数指针在中断中的应用  
+typedef int (*handler_t)(int id);  
+给函数指针int (*handler_t)(int id)为handler_t
+
+//用来记录，每个中断源对应的中断处理函数入口地址
+handler_t function_table[MAX];//函数指针类型的数组:存放多个函数的入口地址
+
+//只能向CPU0注册中断
+void request_irq(int irq_num,handler_t handler)
+{
+	.........
+	//记录中断处理函数
+	function_table[irq_num] = handler;//将handler放入函数指针数组里
+}
+//中断产生的时候调用的函数
+void do_irq(void)
+{
+	int irq_num;
+	handler_t handler;
+	...	
+	//获取中断号
+	irq_num = (CPU0.ICCIAR & 0x3FF);
+
+    //根据中断号，找到中断处理函数的入口地址
+	handler = function_table[irq_num];
+	
+	//根据中断号调用具体中断处理函数
+	handler(irq_num);
+
+	return;
+}
+```
+```sh
+题目
+程序中要对程序地址0x100000赋值unsigned int的数1234，可以这样写（unsigned int *）0x100000 = 1234；要是想让程序跳到绝对地址0x100000去执行，并且带有int型的参数1234，不关心返回值，应该怎么写？说明理由。
+Typedef Void （*fun）(int);
+Fun fff = (fun)0x100000
+fff(1234);
+因为要跳到0x100000，而且还是个函数，所有我们使用函数指针来操作
+因为肯定要将地址给到函数，所以定义一个函数指针变量fff，然后将地址强转赋给fff。
+```
 ### shell
     Shell 是指一种 C 语言编写的应用程序。主要作用是获取用户输入的指令及参数，调用现有的程序实现用户的意图；用户在没有图形界面的情况下 shell 是用户访问系统内核服务的唯一途径（类似于Windows 下的 DOS） ；
 
+1.避免开发人员反复进行一些重复步骤
+2.提高编程效率
+3.不依赖 IDE 就可以实现功能编码，
+4.方便调用机器下的所有资源
 
 ### 内存泄漏和内存溢出
 |内存泄漏|内存溢出|
@@ -83,3 +200,8 @@ volatile优化，多次读取这个变量的值后，编译器会优化过程：
 ### 如何检测内存泄漏
 内存泄露是指用程序运行过程中户失去对内存的访问权利。
 
+
+检查内存泄露的原理：在申请堆内存时将申请记录下来， 释放内存时将申请记录抹除，当函数 main()
+结束时， 若申请记录中仍然存在记录就说明先前某个地方申请的堆空间没有释放！ 
+
+## 数据结构

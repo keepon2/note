@@ -22,3 +22,58 @@
 |$+|所有依赖文件|
 |$<|第一个依赖文件|
 |$?|所有比目标新的依赖文件|
+
+```sh
+CROSS_COMPILE = arm-none-eabi-  //交叉编译  
+CC  = $(CROSS_COMPILE)gcc  
+LD  = $(CROSS_COMPILE)ld  
+OBJCOPY = $(CROSS_COMPILE)objcopy  
+APP = fs4412.elf  
+BIN = fs4412.bin
+CINCLUDES = -I ./include    //头文件路径
+
+LDFLAGS += -static -L ./lib -lc -lm -lnosys
+LDFLAGS += -static -L ./lib -lgcc
+-static:静态链接  
+-L ./lib: 指定了链接器搜索库文件的路径  
+-lc: 告诉链接器链接 C 标准库
+-lm: 告诉链接器链接数学库
+-lnosys :告诉链接器链接一个名为 nosys 的库
+
+include config.mk
+//当 Makefile 在执行时遇到 include 指令，它会暂停当前文件的执行，去读取指定的文件
+
+#COBJS += driver/led.o
+#COBJS += driver/key.o
+#COBJS += driver/beep.o
+#COBJS += driver/music.o
+#COBJS += driver/uart.o
+#COBJS += driver/interrupt.o
+#COBJS += driver/key-interrupt.o
+#COBJS += driver/iic_con.o
+#COBJS += driver/mpu6050.o
+
+#目标:依赖
+#	命令
+
+$(APP):start/start.o main.o  $(COBJS)
+	$(LD) -Ttext=0x40000000 $^ -o $@ $(LDFLAGS)
+	$(OBJCOPY) -O binary $(APP) $(BIN)
+	
+	
+%.o:%.S
+	$(CC) -c $< -o $@
+	
+#start/start.o:start/start.S
+#	arm-none-eabi-gcc -c start/start.s -o start/start.o
+	
+
+#%.o:%.c
+#	$(CC) -c $< -o $@  $(CINCLUDES)
+
+driver/led.o:driver/led.c
+	arm-none-eabi-gcc -c driver/led.c -o driver/led.o -I ./include
+	
+clean:
+	rm -rf driver/*.o
+```
