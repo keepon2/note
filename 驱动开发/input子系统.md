@@ -95,4 +95,7 @@ int input_register_device(struct input_dev *dev);
 input_report_abs(input_dev,ABS_X,x);//x坐标  
 input_report_abs(input_dev,ABS_Y,y);//Y坐标             
 input_report_abs(input_dev,ABS_PRESSURE,pres);//压力                 
-input_sync(struct input_dev *dev);//同步        
+input_sync(struct input_dev *dev);//同步     
+
+#### 终极大招
+一个输入事件，如鼠标移动、键盘按下等通过InputDeviceDriver->Inputcore->Event handler->userspace的顺序到达用户控件的应用程序。   

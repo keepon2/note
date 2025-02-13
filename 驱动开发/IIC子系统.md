@@ -12,7 +12,7 @@
 
 **注意:如果想看到这个设备节点，我们必须配置一下我们的Linux内核，让它包含我们的IC控制器驱动。**    
 
-第一步：在Limnux内核中,找到平台的IC控制器驱动  
+第一步：在Limnux内核中,找到平台的IIC控制器驱动  
 
 平台的IIC控制器驱动默认存放在Limux内核源码树:driversi2c/busses目录下存放。我们当前平台为s5pc100,但是这个目录并没有s5pc100相关的IIC驱动，但是我们会发现有个i2c-s3c2410.c的文件，这个是针对于s3c2410平台编写的IC控制器驱动。比较幸运的是s3c2410的IIC控制器操作方法和s5pc100的IIC控制器操作方法一样。好了接下来我们修改一下这个目录下的Kconfig文件，让它支持我们的s5pc100平台。修改如下:
 ![alt text](IIC-images/image-3.png)  
@@ -110,4 +110,31 @@ int xxx _probe(struct i2c client*client, const struct i2c device id *id)
 ![alt text](IIC-images/image-19.png)    
 
 3.i2c_msg传递  
-![alt text](IIC-images/image-20.png)  
+![alt text](IIC-images/image-20.png)   
+
+## 外部访问i2c总线
+参考： https://doc.embedfire.com/linux/imx6/driver/zh/latest/linux_driver/i2c_mpu6050.html  
+
+![alt text](IIC-images/image-23.png)
+```sh
+每一个I2C总线————————IIC控制器（适配器）——————struct i2c_adapter——————struct i2c_algorithm
+
+注：
+IIC控制器：用于标识物理i2c总线以及访问它所需的访问算法的结构
+
+i2c_algorithm结构体实际提供了一些函数指针，这些函数就是外部访问i2c总线的接口  
+i2c设备例如mpu6050、i2c接口的oled屏等等就是通过这些函数接口使用i2c总线实现收、发数据的。
+```
+![alt text](IIC-images/image-21.png)  
+![alt text](IIC-images/image-22.png)  
+
+
+### i2c总线的运行机制
+```sh
+1、注册I2C总线
+2、将I2C驱动添加到I2C总线的驱动链表中
+3、遍历I2C总线上的设备链表，根据i2c_device_match函数进行匹配，如果匹配调用i2c_device_probe函数
+4、i2c_device_probe函数会调用I2C驱动的probe函数
+
+i2c总线维护着两个链表（I2C驱动、I2C设备），管理I2C设备和I2C驱动的匹配和删除等
+```
