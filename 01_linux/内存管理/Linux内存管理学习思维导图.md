@@ -632,7 +632,383 @@ graph TB
     style E fill:#f39c12
 ```
 
-### 1.4 内存管理核心数据结构
+#### 内核虚拟地址空间详细划分
+
+```mermaid
+graph TB
+    A["内核虚拟地址空间"] --> B["直接映射区 Direct Mapping"]
+    A --> C["VMALLOC区"]
+    A --> D["永久映射区 Permanent Mapping"]
+    A --> E["固定映射区 Fixed Mapping"]
+    A --> F["临时映射区 Temporary Mapping"]
+    
+    B --> B1["PAGE_OFFSET开始"]
+    B --> B2["线性映射物理内存"]
+    B --> B3["大小: 896MB或更大"]
+    
+    C --> C1["VMALLOC_START"]
+    C --> C2["动态分配虚拟内存"]
+    C --> C3["非连续物理内存"]
+    
+    D --> D1["PKMAP_BASE"]
+    D --> D2["永久映射高端内存"]
+    D --> D4["用于访问高端内存"]
+    
+    E --> E1["FIXADDR_START"]
+    E --> E2["固定地址映射"]
+    E --> E3["编译时确定"]
+    
+    F --> F1["临时映射"]
+    F --> F2["kmap_atomic使用"]
+    F --> F3["短期映射"]
+    
+    G[关系] --> H["high_memory: 物理内存结束地址"]
+    G --> I["VMALLOC: vmalloc区"]
+    G --> J["FIXADDR: 固定映射区"]
+    G --> K["三者都是内核虚拟地址的不同区域"]
+    
+    style A fill:#e74c3c
+    style G fill:#3498db
+```
+
+**内核虚拟地址空间五大区域：**
+
+| 区域 | 起始地址 | 映射方式 | 用途 |
+|------|----------|----------|------|
+| **直接映射区** | PAGE_OFFSET | 线性映射 | 内核数据结构、页表 |
+| **VMALLOC区** | VMALLOC_START | 动态非连续 | vmalloc、模块加载 |
+| **永久映射区** | PKMAP_BASE | 固定页表 | kmap()长期映射 |
+| **固定映射区** | FIXADDR_START | 编译时固定 | 内核特殊需求 |
+| **临时映射区** | 与固定映射区重叠 | 临时映射 | kmap_atomic()短期映射 |
+
+##### 1.4.1 直接映射区（Direct Mapping）
+
+```mermaid
+graph TB
+    A[直接映射区] --> B["起始地址: PAGE_OFFSET"]
+    A --> C["映射方式: 线性映射"]
+    A --> D["映射关系: 虚拟地址 = 物理地址 + PAGE_OFFSET"]
+    
+    B --> B1["32位: 0xC0000000"]
+    B --> B2["64位: 0xffff880000000000"]
+    
+    C --> C1["一对一映射"]
+    C --> C2["物理内存直接可见"]
+    C --> C3["访问速度快"]
+    
+    D --> D4["虚拟地址 - PAGE_OFFSET = 物理地址"]
+    D --> D5["virt_to_phys()转换"]
+    D --> D6["phys_to_virt()转换"]
+    
+    E[特点] --> F["大小: 896MB或更大"]
+    E --> G["连续物理内存"]
+    E --> H["用于内核数据结构"]
+    
+    I[示例] --> J["物理地址: 0x00100000"]
+    I --> K["虚拟地址: 0xC0100000 (32位)"]
+    I --> L["虚拟地址: 0xffff888000100000 (64位)"]
+    
+    style A fill:#e74c3c
+    style E fill:#3498db
+    style I fill:#2ecc71
+```
+
+**特点：**
+- **线性映射**：虚拟地址 = 物理地址 + PAGE_OFFSET
+- **访问速度快**：不需要页表查找
+- **用途**：内核数据结构、内核栈、页表等
+
+**API：**
+```c
+// 虚拟地址转物理地址
+phys_addr_t virt_to_phys(const volatile void *addr);
+
+// 物理地址转虚拟地址
+void *phys_to_virt(phys_addr_t address);
+```
+
+##### 1.4.2 VMALLOC区（动态映射区）
+
+```mermaid
+graph TB
+    A[VMALLOC区] --> B["起始地址: VMALLOC_START"]
+    A --> C["结束地址: VMALLOC_END"]
+    A --> D["映射方式: 动态非连续映射"]
+    
+    B --> B1["32位: 0xC0000000 + 896MB"]
+    B --> B2["64位: VMALLOC_START"]
+    
+    C --> C3["32位: 0xFEC00000"]
+    C --> C4["64位: VMALLOC_END"]
+    
+    D --> D1["非连续物理内存"]
+    D --> D2["通过页表映射"]
+    D --> D3["动态分配"]
+    
+    E[用途] --> F["vmalloc()分配"]
+    E --> G["模块加载"]
+    E --> H["ioremap()映射"]
+    E --> I["大块内存分配"]
+    
+    J[特点] --> K["访问速度较慢"]
+    J --> L["需要页表查找"]
+    J --> M["不能用于DMA"]
+    
+    style A fill:#e74c3c
+    style E fill:#3498db
+    style J fill:#f39c12
+```
+
+**特点：**
+- **动态非连续映射**：可以分配非连续的物理内存
+- **需要页表**：访问速度较慢
+- **用途**：vmalloc()、模块加载、ioremap()
+
+**API：**
+```c
+// 分配虚拟内存
+void *vmalloc(unsigned long size);
+
+// 释放虚拟内存
+void vfree(const void *addr);
+
+// 分配并清零
+void *vzalloc(unsigned long size);
+```
+
+##### 1.4.3 永久映射区（Permanent Mapping）
+
+```mermaid
+graph TB
+    A[永久映射区] --> B["起始地址: PKMAP_BASE"]
+    A --> C["大小: PKMAP_SIZE"]
+    A --> D["映射方式: 固定页表"]
+    
+    B --> B1["32位: 0xC0000000 + 896MB + 8MB"]
+    B --> B2["64位: PKMAP_BASE"]
+    
+    C --> C3["通常: 2MB或4MB"]
+    C --> C4["LAST_PKMAP个页面"]
+    
+    D --> D1["固定映射高端内存页面"]
+    D --> D2["使用kmap()函数"]
+    D --> D3["可以睡眠"]
+    
+    E[用途] --> F["访问高端内存"]
+    E --> G["长期映射"]
+    E --> H["需要持久的访问"]
+    
+    I[特点] --> J["数量有限"]
+    I --> K["需要互斥锁"]
+    I --> L["用于非原子上下文"]
+    
+    M[API] --> N["kmap(page)"]
+    M --> O["kunmap(page)"]
+    
+    style A fill:#e74c3c
+    style E fill:#3498db
+    style I fill:#f39c12
+```
+
+**特点：**
+- **固定页表**：使用固定的页表项
+- **数量有限**：LAST_PKMAP个页面
+- **可以睡眠**：适用于进程上下文
+
+**API：**
+```c
+// 映射高端内存页面
+void *kmap(struct page *page);
+
+// 解除映射
+void kunmap(struct page *page);
+```
+
+##### 1.4.4 固定映射区（Fixed Mapping）
+
+```mermaid
+graph TB
+    A[固定映射区] --> B["起始地址: FIXADDR_START"]
+    A --> C["结束地址: FIXADDR_TOP"]
+    A --> D["映射方式: 编译时固定"]
+    
+    B --> B1["32位: 0xFFFFE000"]
+    B --> B2["64位: FIXADDR_START"]
+    
+    C --> C3["32位: 0xFFFFFFFF"]
+    C --> C4["64位: FIXADDR_TOP"]
+    
+    D --> D1["编译时确定"]
+    D --> D2["固定虚拟地址"]
+    D --> D3["固定物理地址"]
+    
+    E[用途] --> F["固定虚拟地址的物理内存"]
+    E --> G["内核特殊需求"]
+    E --> H["中断处理等"]
+    
+    I[特点] --> J["地址固定"]
+    I --> K["不动态分配"]
+    I --> L["编译时配置"]
+    
+    M[API] --> N["fix_to_virt(index)"]
+    M --> O["virt_to_fix(addr)"]
+    
+    style A fill:#e74c3c
+    style E fill:#3498db
+    style I fill:#f39c12
+```
+
+**特点：**
+- **编译时固定**：地址在编译时确定
+- **固定映射**：虚拟地址和物理地址固定对应
+- **特殊用途**：内核特殊需求
+
+**API：**
+```c
+// 索引转虚拟地址
+unsigned long fix_to_virt(unsigned int idx);
+
+// 虚拟地址转索引
+unsigned int virt_to_fix(unsigned long addr);
+```
+
+##### 1.4.5 临时映射区（Temporary Mapping）
+
+```mermaid
+graph TB
+    A[临时映射区] --> B["起始地址: FIXADDR_START"]
+    A --> C["映射方式: 临时映射"]
+    A --> D["使用kmap_atomic()"]
+    
+    B --> B1["与固定映射区重叠"]
+    B --> B2["使用固定映射区的一部分"]
+    
+    C --> C3["临时映射高端内存"]
+    C --> C4["短期访问"]
+    
+    D --> D1["原子操作"]
+    D --> D2["不能睡眠"]
+    D --> D3["中断上下文使用"]
+    
+    E[用途] --> F["中断处理"]
+    E --> G["原子上下文"]
+    E --> H["短期访问高端内存"]
+    
+    I[特点] --> J["速度快"]
+    I --> K["不需要互斥锁"]
+    I --> L["数量有限"]
+    
+    M[API] --> N["kmap_atomic(page, type)"]
+    M --> O["kunmap_atomic(addr)"]
+    
+    style A fill:#e74c3c
+    style E fill:#3498db
+    style I fill:#f39c12
+```
+
+**特点：**
+- **临时映射**：短期访问高端内存
+- **原子操作**：不能睡眠
+- **速度快**：不需要互斥锁
+
+**API：**
+```c
+// 原子映射
+void *kmap_atomic(struct page *page);
+
+// 解除原子映射
+void kunmap_atomic(void *addr);
+```
+
+##### 1.4.6 关键概念关系
+
+```mermaid
+graph TB
+    A[关键概念] --> B["high_memory"]
+    A --> C["VMALLOC"]
+    A --> D["FIXADDR"]
+    
+    B --> B1["物理内存结束地址"]
+    B --> B2["高端内存的起始"]
+    B --> B3["high_memory = 直接映射区结束"]
+    
+    C --> C1["vmalloc区"]
+    C --> C2["动态映射区"]
+    C --> C3["用于vmalloc()"]
+    
+    D --> D1["固定映射区"]
+    D --> D2["FIXADDR_START"]
+    D --> D3["编译时确定的固定地址"]
+    
+    E[关系] --> F["high_memory: 物理内存边界"]
+    E --> G["VMALLOC: 动态映射虚拟地址"]
+    E --> H["FIXADDR: 固定映射虚拟地址"]
+    E --> I["三者都是内核虚拟地址的不同区域"]
+    
+    style A fill:#e74c3c
+    style E fill:#3498db
+```
+
+**重要说明：**
+
+| 概念 | 含义 | 类型 |
+|------|------|------|
+| **high_memory** | 物理内存结束地址（高端内存起始） | 物理地址 |
+| **VMALLOC** | vmalloc动态映射区 | 虚拟地址 |
+| **FIXADDR** | 固定映射区 | 虚拟地址 |
+
+**关键点：**
+- **high_memory**：物理内存边界，不是虚拟地址
+- **VMALLOC**：内核虚拟地址的一个区域
+- **FIXADDR**：内核虚拟地址的一个区域
+- 三者都是不同的概念，不要混淆！
+
+##### 1.4.7 内核虚拟地址API对比
+
+```mermaid
+graph TB
+    A[内核虚拟地址分配API] --> B["kmalloc"]
+    A --> C["vmalloc"]
+    A --> D["kmap"]
+    A --> E["kmap_atomic"]
+    
+    B --> B1["直接映射区"]
+    B --> B2["连续物理内存"]
+    B --> B3["小对象分配"]
+    
+    C --> C1["VMALLOC区"]
+    C --> C2["非连续物理内存"]
+    C --> B3["大块内存分配"]
+    
+    D --> D1["永久映射区"]
+    D --> D2["高端内存"]
+    D --> B3["长期映射"]
+    
+    E --> E1["临时映射区"]
+    E --> E2["高端内存"]
+    E --> B3["短期映射"]
+    
+    F[选择] --> G["连续小内存: kmalloc"]
+    F --> H["非连续大内存: vmalloc"]
+    F --> I["高端内存长期: kmap"]
+    F --> J["高端内存短期: kmap_atomic"]
+    F --> K["特殊需求: fix_to_virt"]
+    
+    style A fill:#e74c3c
+    style F fill:#3498db
+```
+
+**API选择指南：**
+
+| 需求 | API | 区域 | 特点 |
+|------|-----|------|------|
+| **连续小内存** | kmalloc() | 直接映射区 | 速度快，适合小对象 |
+| **非连续大内存** | vmalloc() | VMALLOC区 | 可以分配大块内存 |
+| **高端内存长期** | kmap() | 永久映射区 | 长期访问，可睡眠 |
+| **高端内存短期** | kmap_atomic() | 临时映射区 | 短期访问，原子操作 |
+| **特殊需求** | fix_to_virt() | 固定映射区 | 固定地址，特殊用途 |
+
+### 1.5 内存管理核心数据结构
 
 ```mermaid
 classDiagram
